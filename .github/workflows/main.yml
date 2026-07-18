@@ -2,31 +2,26 @@ name: 打包 macOS App
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # 支持网页手动一键打包
+  workflow_dispatch:
 
 jobs:
   build_mac:
     runs-on: macos-latest
     steps:
-      # 1. 拉取仓库全部代码
       - name: 检出源码
         uses: actions/checkout@v4
 
-      # 2. 配置Python3.10环境
       - name: 安装Python3.10
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # 3. 安装打包工具+项目依赖【重点补全你的所有库】
       - name: 安装全部依赖与py2app打包工具
         run: |
           python -m pip install --upgrade pip
-          # ==========在这里追加你代码用到的所有第三方库==========
           pip install py2app
-          # 示例：pip install py2app customtkinter pillow requests pyserial
+          # 在这里补全你的所有第三方库，例：pip install py2app customtkinter pillow requests
 
-      # 4. 生成兼容GUI防崩溃的打包配置
       - name: 生成setup.py打包配置
         run: |
           cat > setup.py << EOF
@@ -35,30 +30,26 @@ jobs:
               app=['play.py'],
               options={
                   'py2app': {
-                      'argv_emulation': True,
-                      'qt_plugins_include': False
+                      'argv_emulation': True
                   }
               },
               setup_requires=['py2app'],
           )
           EOF
 
-      # 5. 编译生成 .app 程序包
       - name: 编译Mac App应用
         run: python setup.py py2app
 
-      # 6. 云端提前清除安全隔离标记，减少用户启动报错
       - name: 移除系统安全隔离属性
         run: xattr -cr dist/*.app
 
-      # 7. 云端自动测试启动，提前捕获Launch error（不用借Mac测试）
-      - name: 云端自动测试App启动是否崩溃
+      - name: 云端完整日志测试App
         run: |
-          open dist/*.app
+          ./dist/*.app/Contents/MacOS/* &
+          PID=$!
           sleep 8
-          pkill -f play || true
+          kill $PID || true
 
-      # 8. 上传最终可用的.app压缩包
       - name: 上传Mac应用安装包
         uses: actions/upload-artifact@v4
         with:
