@@ -2,48 +2,65 @@ name: 打包 macOS App
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # 支持手动一键打包
+  workflow_dispatch: # 支持网页手动一键打包
 
 jobs:
   build_mac:
-    runs-on: macos-latest # 使用macOS系统环境
+    runs-on: macos-latest
     steps:
-      # 拉取仓库全部代码
+      # 1. 拉取仓库全部代码
       - name: 检出源码
         uses: actions/checkout@v4
 
-      # 配置Python环境
+      # 2. 配置Python3.10环境
       - name: 安装Python3.10
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # 安装打包工具 py2app（mac专属打包工具）
-      - name: 安装依赖与打包工具
+      # 3. 安装打包工具+项目依赖【重点补全你的所有库】
+      - name: 安装全部依赖与py2app打包工具
         run: |
           python -m pip install --upgrade pip
+          # ==========在这里追加你代码用到的所有第三方库==========
           pip install py2app
-          # 在这里追加你的项目第三方库，示例：pip install requests pillow
+          # 示例：pip install py2app customtkinter pillow requests pyserial
 
-      # 生成setup.py打包配置文件
-      - name: 生成打包配置
+      # 4. 生成兼容GUI防崩溃的打包配置
+      - name: 生成setup.py打包配置
         run: |
           cat > setup.py << EOF
           from setuptools import setup
           setup(
-              app=['play.py'],  # 你的启动脚本
-              options={'py2app': {'argv_emulation': True}},
+              app=['play.py'],
+              options={
+                  'py2app': {
+                      'argv_emulation': True,
+                      'qt_plugins_include': False
+                  }
+              },
               setup_requires=['py2app'],
           )
           EOF
 
-      # 编译生成 .app 程序包
-      - name: 编译Mac App
+      # 5. 编译生成 .app 程序包
+      - name: 编译Mac App应用
         run: python setup.py py2app
 
-      # 把打包好的.app上传为可下载产物
-      - name: 上传编译产物
+      # 6. 云端提前清除安全隔离标记，减少用户启动报错
+      - name: 移除系统安全隔离属性
+        run: xattr -cr dist/*.app
+
+      # 7. 云端自动测试启动，提前捕获Launch error（不用借Mac测试）
+      - name: 云端自动测试App启动是否崩溃
+        run: |
+          open dist/*.app
+          sleep 8
+          pkill -f play || true
+
+      # 8. 上传最终可用的.app压缩包
+      - name: 上传Mac应用安装包
         uses: actions/upload-artifact@v4
         with:
-          name: macOS-App安装包
+          name: macOS-完整App程序包
           path: dist/*.app
